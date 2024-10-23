@@ -97,18 +97,24 @@ export default function Home() {
 
 */
 'use client'
-import React, { useState } from 'react';
-import TextField from '@mui/material/TextField';
-import Select from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Button from '@mui/material/Button';
-import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import Container from '@mui/material/Container';
-import Card from '@mui/material/Card';
-import CardContent from '@mui/material/CardContent';
+import React, { useState, useEffect } from 'react';
+import {
+  TextField, Select, MenuItem, FormControl, InputLabel, Button,
+  Box, Typography, Container, Card, CardContent, Table,
+  TableBody, TableCell, TableContainer, TableHead, TableRow,
+  Paper, IconButton, Dialog, DialogTitle, DialogContent,
+  DialogActions
+} from '@mui/material';
+import { Edit as EditIcon, Delete as DeleteIcon } from '@mui/icons-material';
+import { 
+  addDoc, 
+  collection, 
+  getDocs, 
+  updateDoc, 
+  deleteDoc, 
+  doc 
+} from 'firebase/firestore';
+import { db } from '../app/assets/firebase/config';
 
 const specialties = [
   'Cardiología',
@@ -124,9 +130,30 @@ export default function AddAppointment() {
     name: '',
     age: '',
     specialty: '',
-    date: '',
-    time: ''
+    appointmentDate: '', 
+    appointmentTime: '', 
   });
+
+  const [patients, setPatients] = useState([]);
+  const [openEditDialog, setOpenEditDialog] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null);
+
+  useEffect(() => {
+    fetchPatients();
+  }, []);
+
+  const fetchPatients = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'patients'));
+      const patientsData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPatients(patientsData);
+    } catch (error) {
+      console.error("Error fetching patients:", error);
+    }
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -136,19 +163,82 @@ export default function AddAppointment() {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log(formData);
+    try {
+      const patientData = {
+        name: formData.name,
+        age: Number(formData.age),
+        specialty: formData.specialty,
+        appointmentDate: formData.appointmentDate,
+        appointmentTime: formData.appointmentTime
+      };
+
+      await addDoc(collection(db, 'patients'), patientData);
+      setFormData({
+        name: '',
+        age: '',
+        specialty: '',
+        appointmentDate: '',
+        appointmentTime: ''
+      });
+      fetchPatients();
+    } catch (error) {
+      console.error("Error adding patient:", error);
+    }
+  };
+
+  const handleEditClick = (patient) => {
+    setEditingPatient(patient);
+    setOpenEditDialog(true);
+  };
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target;
+    setEditingPatient(prev => ({
+      ...prev,
+      [name]: name === 'age' ? Number(value) : value
+    }));
+  };
+
+  const handleEditSubmit = async () => {
+    try {
+      const patientRef = doc(db, 'patients', editingPatient.id);
+      const updateData = {
+        name: editingPatient.name,
+        age: Number(editingPatient.age),
+        specialty: editingPatient.specialty,
+        appointmentDate: editingPatient.appointmentDate,
+        appointmentTime: editingPatient.appointmentTime
+      };
+      
+      await updateDoc(patientRef, updateData);
+      setOpenEditDialog(false);
+      fetchPatients();
+    } catch (error) {
+      console.error("Error updating patient:", error);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('¿Está seguro de que desea eliminar este registro?')) {
+      try {
+        await deleteDoc(doc(db, 'patients', id));
+        fetchPatients();
+      } catch (error) {
+        console.error("Error deleting patient:", error);
+      }
+    }
   };
 
   return (
-    <Container maxWidth="sm">
+    <Container maxWidth="md">
       <Card sx={{ mt: 4 }}>
         <CardContent>
           <Typography variant="h5" gutterBottom>
             Nuevo Paciente
           </Typography>
-          
+
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2 }}>
             <TextField
               fullWidth
@@ -191,9 +281,9 @@ export default function AddAppointment() {
             <TextField
               fullWidth
               label="Fecha"
-              name="date"
+              name="appointmentDate"
               type="date"
-              value={formData.date}
+              value={formData.appointmentDate}
               onChange={handleChange}
               margin="normal"
               required
@@ -203,16 +293,16 @@ export default function AddAppointment() {
             <TextField
               fullWidth
               label="Hora"
-              name="time"
+              name="appointmentTime"
               type="time"
-              value={formData.time}
+              value={formData.appointmentTime}
               onChange={handleChange}
               margin="normal"
               required
               InputLabelProps={{ shrink: true }}
             />
 
-            <Button 
+            <Button
               type="submit"
               variant="contained"
               fullWidth
@@ -223,6 +313,113 @@ export default function AddAppointment() {
           </Box>
         </CardContent>
       </Card>
+
+      <TableContainer component={Paper} sx={{ mt: 4 }}>
+        <Table>
+          <TableHead>
+            <TableRow>
+              <TableCell>Nombre</TableCell>
+              <TableCell>Edad</TableCell>
+              <TableCell>Especialidad</TableCell>
+              <TableCell>Fecha</TableCell>
+              <TableCell>Hora</TableCell>
+              <TableCell>Acciones</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {patients.map((patient) => (
+              <TableRow key={patient.id}>
+                <TableCell>{patient.name}</TableCell>
+                <TableCell>{patient.age}</TableCell>
+                <TableCell>{patient.specialty}</TableCell>
+                <TableCell>{patient.appointmentDate}</TableCell>
+                <TableCell>{patient.appointmentTime}</TableCell>
+                <TableCell>
+                  <IconButton onClick={() => handleEditClick(patient)}>
+                    <EditIcon />
+                  </IconButton>
+                  <IconButton onClick={() => handleDelete(patient.id)}>
+                    <DeleteIcon />
+                  </IconButton>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      <Dialog open={openEditDialog} onClose={() => setOpenEditDialog(false)}>
+        <DialogTitle>Editar Paciente</DialogTitle>
+        <DialogContent>
+          {editingPatient && (
+            <Box sx={{ pt: 2 }}>
+              <TextField
+                fullWidth
+                label="Nombre Completo"
+                name="name"
+                value={editingPatient.name}
+                onChange={handleEditChange}
+                margin="normal"
+                required
+              />
+              <TextField
+                fullWidth
+                label="Edad"
+                name="age"
+                type="number"
+                value={editingPatient.age}
+                onChange={handleEditChange}
+                margin="normal"
+                required
+              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Especialidad</InputLabel>
+                <Select
+                  name="specialty"
+                  value={editingPatient.specialty}
+                  onChange={handleEditChange}
+                  label="Especialidad"
+                  required
+                >
+                  {specialties.map((specialty) => (
+                    <MenuItem key={specialty} value={specialty}>
+                      {specialty}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                fullWidth
+                label="Fecha"
+                name="appointmentDate"
+                type="date"
+                value={editingPatient.appointmentDate}
+                onChange={handleEditChange}
+                margin="normal"
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+              <TextField
+                fullWidth
+                label="Hora"
+                name="appointmentTime"
+                type="time"
+                value={editingPatient.appointmentTime}
+                onChange={handleEditChange}
+                margin="normal"
+                required
+                InputLabelProps={{ shrink: true }}
+              />
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpenEditDialog(false)}>Cancelar</Button>
+          <Button onClick={handleEditSubmit} variant="contained">
+            Guardar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
-};
+}
