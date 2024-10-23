@@ -7,7 +7,7 @@ import {
   deleteDoc,
   doc 
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { db } from '../../app/assets/firebase/config';
 import { useForm } from 'react-hook-form';
 import {
   TextField,
